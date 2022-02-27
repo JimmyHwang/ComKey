@@ -40,13 +40,15 @@ class KEYBOARD_CLASS {
 public:
   char *DevicePath;
   int DeviceHandle;
+  int KeyCount;
   
   // Default constructor
   KEYBOARD_CLASS(char *device);
 
   int Init();
   int Send(char *data);
-  
+  void SendKey(int key_code);
+    
 private:
 
 };

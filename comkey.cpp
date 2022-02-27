@@ -270,6 +270,7 @@ void SERIAL_PORT_CLASS::Tick() {
     // printf("<n=%d>", n);
     memcpy (ReceiveBuffer+ReceivePointer, buf, n);
     ReceivePointer += n;    
+    *(ReceiveBuffer+ReceivePointer) = 0;
   }
 }
 
@@ -279,6 +280,7 @@ void SERIAL_PORT_CLASS::Tick() {
 KEYBOARD_CLASS::KEYBOARD_CLASS(char *device) {
   int len;
   
+  KeyCount = 0;
   DeviceHandle = 0;
   do {
     //
@@ -305,6 +307,18 @@ int KEYBOARD_CLASS::Init() {
   return 0;
 }
 
+void KEYBOARD_CLASS::SendKey(int key_code) {
+  struct input_event event;
+  event.type = EV_KEY;
+  event.value = EV_PRESSED;
+  event.code = key_code;
+  write(DeviceHandle, &event, sizeof(struct input_event));
+
+  event.value = EV_RELEASED;
+  event.code = key_code;
+  write(DeviceHandle, &event, sizeof(struct input_event));    
+}
+
 int KEYBOARD_CLASS::Send(char *data) {
   struct input_event event;
   int len;
@@ -312,29 +326,27 @@ int KEYBOARD_CLASS::Send(char *data) {
   int key_code;
   int fd;
   
+  //printf("<send=%s>", data);
   len = strlen(data);
   for (int i=0; i<len; i++) {
     ch = data[i];
-    printf("<ch=0x%X>", ch);
     if (ch == 0x0A) {
       key_code = KEY_ENTER;
     } else {
       key_code = char_to_keycode(ch);
     }
-    // DeviceHandle = open(DevicePath, O_RDWR);
-    // Press a key (stuff the keyboard with a keypress)
-    event.type = EV_KEY;
-    event.value = EV_PRESSED;
-    //event.code = KEY_B;
-    event.code = key_code;
-    write(DeviceHandle, &event, sizeof(struct input_event));
-
-    // Release the key
-    event.value = EV_RELEASED;
-    //event.code = KEY_B;
-    event.code = key_code;
-    write(DeviceHandle, &event, sizeof(struct input_event));    
-    // close(fd);
+    SendKey(key_code);
+    
+    //
+    // Workaround: Seem key buffer will process when 4 key boundry
+    //
+    // KeyCount++;
+    // if (key_code == KEY_ENTER) {
+      // while (KeyCount % 4 != 0) {
+        // SendKey(KEY_ENTER);
+        // KeyCount++;
+      // }
+    // }
   }
   // close(fd);
 }
@@ -348,7 +360,9 @@ int MainLoop() {
     gKeyboardObj->Send(gSerialPortObj->ReceiveBuffer);
     gSerialPortObj->ReceivePointer = 0;
   }
-  fflush(stdout); 
+  //fflush(stdout); 
+  // fflush(stdin); 
+  // fseek(stdin,0,SEEK_END);
   usleep(100*1000); // 1/10 second
 }
 
