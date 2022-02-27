@@ -5,6 +5,7 @@
 
 bool gVerboseFlag = FALSE;
 bool gDaemonFlag = FALSE;
+int gComPortNum = 0;
 char gSerialPortDevice[] = "/dev/ttyS1";
 SERIAL_PORT_CLASS *gSerialPortObj = NULL;
 
@@ -186,13 +187,14 @@ int MainLoop() {
 int main(int argc, char **argv) {
   pid_t pid;
   int cmd_opt = 0;
+  int com;
   
-  printf("COMKEY Version 1.00\n");
+  printf("---------------------\n");
+  printf(" COMKEY Version 1.00\n");
+  printf("---------------------\n");
 
-  // fprintf(stderr, "argc:%d\n", argc);
   while(1) {
-      // fprintf(stderr, "proces index:%d\n", optind);
-    cmd_opt = getopt(argc, argv, "vdh?");
+    cmd_opt = getopt(argc, argv, "vdh?s:");
 
     /* End condition always first */
     if (cmd_opt == -1) {
@@ -200,9 +202,9 @@ int main(int argc, char **argv) {
     }
 
     /* Print option when it is valid */
-    if (cmd_opt != '?') {
-      printf("option:-%c\n", cmd_opt);
-    }
+    // if (cmd_opt != '?') {
+      // printf("option:-%c\n", cmd_opt);
+    // }
 
     /* Lets parse */
     switch (cmd_opt) {
@@ -216,11 +218,24 @@ int main(int argc, char **argv) {
         gDaemonFlag = TRUE;        
         break;
 
+      case 's':
+        com = (int)strtol(optarg, NULL, 10);
+        if (com == 1 || com == 2) {
+          gComPortNum = com;
+        } else {
+          printf("Error: Invalid COM Port\n");
+        }
+        break;
+
       default:
-        printf("Not supported option\n");
+        printf("Error: Not supported option\n");
         break;
     }
   }
+
+  printf("Verbose Flag  = %d\n", gVerboseFlag);
+  printf("Daemon Flag   = %d\n", gDaemonFlag);
+  printf("COM Port      = %d\n", gComPortNum);
 
   /* Do we have args? */
   if (gVerboseFlag) {
@@ -235,6 +250,14 @@ int main(int argc, char **argv) {
   //
   // Startup
   //
+  if (gComPortNum == 0) {
+    printf("Error: Invalid COM port number\n");
+    return 0;    
+  } else {
+    sprintf(gSerialPortDevice, "/dev/ttyS%d", gComPortNum);
+  }
+  printf("Serial Device = %s\n", gSerialPortDevice);
+
   gSerialPortObj = new SERIAL_PORT_CLASS(gSerialPortDevice);
   gSerialPortObj->Init();
   
@@ -244,7 +267,7 @@ int main(int argc, char **argv) {
       printf("Error: fork() is failed\n");
       return 0;    
     } else if (pid == 0) {      // PID == 0 代表是子程序
-      printf("Info: PID is %d\n", getpid());
+      printf("Info: Run with Daemon Mode, PID is %d\n", getpid());
       while (TRUE) {
         MainLoop();
       }
