@@ -10,11 +10,17 @@
 #include <termios.h>
 #include <unistd.h>
 #include <malloc.h>
+#include <fcntl.h>
+#include <linux/input.h>
+
+#define EV_PRESSED 1
+#define EV_RELEASED 0
+#define EV_REPEAT 2
 
 class SERIAL_PORT_CLASS {
 public:
+  char *DevicePath;
   int DeviceHandle;
-  char *SerialPortDevice;
   char *ReceiveBuffer;
   int ReceivePointer;
   
@@ -24,6 +30,22 @@ public:
   int Init();
   int Send(char *data);
   void Tick();
+  
+private:
+
+};
+
+
+class KEYBOARD_CLASS {
+public:
+  char *DevicePath;
+  int DeviceHandle;
+  
+  // Default constructor
+  KEYBOARD_CLASS(char *device);
+
+  int Init();
+  int Send(char *data);
   
 private:
 

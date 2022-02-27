@@ -2,12 +2,15 @@
 
 #define TRUE                    1
 #define FALSE                   0
+#define DEBUG_FLAG              0
 
 bool gVerboseFlag = FALSE;
 bool gDaemonFlag = FALSE;
 int gComPortNum = 0;
 char gSerialPortDevice[] = "/dev/ttyS1";
 SERIAL_PORT_CLASS *gSerialPortObj = NULL;
+char gKeyboardDevice[] = "/dev/input/event1";
+KEYBOARD_CLASS *gKeyboardObj = NULL;
 
 //-----------------------------------------------------------------------------
 // Common Functions
@@ -102,6 +105,105 @@ set_blocking (int fd, int should_block)
   printf ("error %d setting term attributes", errno);
 }
 
+short char_to_keycode(char c) {
+  short keycode;
+  switch(c) {
+    // these two are on many keyboard views on Android
+  case ' ': keycode = KEY_SPACE; break;
+  case '.': keycode = KEY_DOT; break;
+
+    // normal keyboard
+  case 'a': case 'A': keycode = KEY_A; break;
+  case 'b': case 'B': keycode = KEY_B; break;
+  case 'c': case 'C': keycode = KEY_C; break;
+  case 'd': case 'D': keycode = KEY_D; break;
+  case 'e': case 'E': keycode = KEY_E; break;
+  case 'f': case 'F': keycode = KEY_F; break;
+  case 'g': case 'G': keycode = KEY_G; break;
+  case 'h': case 'H': keycode = KEY_H; break;
+  case 'i': case 'I': keycode = KEY_I; break;
+  case 'j': case 'J': keycode = KEY_J; break;
+  case 'k': case 'K': keycode = KEY_K; break;
+  case 'l': case 'L': keycode = KEY_L; break;
+  case 'm': case 'M': keycode = KEY_M; break;
+  case 'n': case 'N': keycode = KEY_N; break;
+  case 'o': case 'O': keycode = KEY_O; break;
+  case 'p': case 'P': keycode = KEY_P; break;
+  case 'q': case 'Q': keycode = KEY_Q; break;
+  case 'r': case 'R': keycode = KEY_R; break;
+  case 's': case 'S': keycode = KEY_S; break;
+  case 't': case 'T': keycode = KEY_T; break;
+  case 'u': case 'U': keycode = KEY_U; break;
+  case 'v': case 'V': keycode = KEY_V; break;
+  case 'w': case 'W': keycode = KEY_W; break;
+  case 'x': case 'X': keycode = KEY_X; break;
+  case 'y': case 'Y': keycode = KEY_Y; break;
+  case 'z': case 'Z': keycode = KEY_Z; break;
+
+    // special chars on Android keyboard, page 1
+  case '1': keycode = KEY_1; break;
+  case '2': keycode = KEY_2; break;
+  case '3': keycode = KEY_3; break;
+  case '4': keycode = KEY_4; break;
+  case '5': keycode = KEY_5; break;
+  case '6': keycode = KEY_6; break;
+  case '7': keycode = KEY_7; break;
+  case '8': keycode = KEY_8; break;
+  case '9': keycode = KEY_9; break;
+  case '0': keycode = KEY_0; break;
+
+  case '@': keycode = KEY_2; break; // with SHIFT
+  case '#': keycode = KEY_3; break; // with SHIFT
+    //case '€': keycode = KEY_5; break; // with ALTGR; not ASCII
+  case '%': keycode = KEY_5; break; // with SHIFT
+  case '&': keycode = KEY_7; break; // with SHIFT
+  case '*': keycode = KEY_8; break; // with SHIFT; alternative is KEY_KPASTERISK
+  case '-': keycode = KEY_MINUS; break; // alternative is KEY_KPMINUS
+  case '+': keycode = KEY_EQUAL; break; // with SHIFT; alternative is KEY_KPPLUS
+  case '(': keycode = KEY_9; break; // with SHIFT
+  case ')': keycode = KEY_0; break; // with SHIFT
+
+  case '!': keycode = KEY_1; break; // with SHIFT
+  case '"': keycode = KEY_APOSTROPHE; break; // with SHIFT, dead key
+  case '\'': keycode = KEY_APOSTROPHE; break; // dead key
+  case ':': keycode = KEY_SEMICOLON; break; // with SHIFT
+  case ';': keycode = KEY_SEMICOLON; break;
+  case '/': keycode = KEY_SLASH; break;
+  case '?': keycode = KEY_SLASH; break; // with SHIFT
+
+  case ',': keycode = KEY_COMMA; break;
+
+    // special chars on Android keyboard, page 2
+  case '~': keycode = KEY_GRAVE; break; // with SHIFT, dead key
+  case '`': keycode = KEY_GRAVE; break; // dead key
+  case '|': keycode = KEY_BACKSLASH; break; // with SHIFT
+    // missing because there's no ASCII code:  •, √, π, ÷, ×
+  case '{': keycode = KEY_LEFTBRACE; break; // with SHIFT
+  case '}': keycode = KEY_RIGHTBRACE; break; // with SHIFT
+
+    // note: TAB key is handled elsewhere
+    // missing because there's no ASCII code: £, ¥
+  case '$': keycode = KEY_4; break; // with SHIFT
+    // missing because there's no ASCII code: °
+  case '^': keycode = KEY_6; break; // with SHIFT, dead key
+  case '_': keycode = KEY_MINUS; break; // with SHIFT
+  case '=': keycode = KEY_EQUAL; break;
+  case '[': keycode = KEY_LEFTBRACE; break;
+  case ']': keycode = KEY_RIGHTBRACE; break;
+
+    // missing because there's no ASCII code:  ™, ®, ©, ¶
+  case '\\': keycode = KEY_BACKSLASH; break;
+  case '<': keycode = KEY_COMMA; break; // with SHIFT
+  case '>': keycode = KEY_DOT; break; // with SHIFT
+
+    // missing because there's no ASCII code:  „, …
+
+  default: keycode = -1;
+  }
+
+  return keycode;
+}
+
 //-----------------------------------------------------------------------------
 // SERIAL_PORT_CLASS
 //-----------------------------------------------------------------------------
@@ -123,12 +225,12 @@ SERIAL_PORT_CLASS::SERIAL_PORT_CLASS(char *device) {
     // Copy device name
     //
     len = strlen(device);
-    SerialPortDevice = (char *)malloc(len+1);
-    if (SerialPortDevice == NULL) {
+    DevicePath = (char *)malloc(len+1);
+    if (DevicePath == NULL) {
       printf("Error: SERIAL_PORT_CLASS() allocate failed 2\n");
       break;
     }
-    strcpy(SerialPortDevice, device);
+    strcpy(DevicePath, device);
     break;
   } while (TRUE);
 }
@@ -136,7 +238,7 @@ SERIAL_PORT_CLASS::SERIAL_PORT_CLASS(char *device) {
 int SERIAL_PORT_CLASS::Init() {
   int fd;
 
-  fd = open (SerialPortDevice, O_RDWR | O_NOCTTY | O_SYNC);
+  fd = open (DevicePath, O_RDWR | O_NOCTTY | O_SYNC);
   if (fd < 0) {
     //printf ("error %d opening %s: %s", errno, portname, strerror (errno));
   } else {
@@ -172,12 +274,78 @@ void SERIAL_PORT_CLASS::Tick() {
 }
 
 //-----------------------------------------------------------------------------
+// KEYBOARD_CLASS
+//-----------------------------------------------------------------------------
+KEYBOARD_CLASS::KEYBOARD_CLASS(char *device) {
+  int len;
+  
+  DeviceHandle = 0;
+  do {
+    //
+    // Copy device name
+    //
+    len = strlen(device);
+    DevicePath = (char *)malloc(len+1);
+    if (DevicePath == NULL) {
+      printf("Error: KEYBOARD_CLASS() allocate failed 2\n");
+      break;
+    }
+    strcpy(DevicePath, device);
+    break;
+  } while (TRUE);
+}
+
+int KEYBOARD_CLASS::Init() {
+  int fd;
+  if ((fd = open(DevicePath, O_RDWR)) > 0) {
+    DeviceHandle = fd;
+  } else {
+    printf("Error: Open keyboard device failed\n");
+  }
+  return 0;
+}
+
+int KEYBOARD_CLASS::Send(char *data) {
+  struct input_event event;
+  int len;
+  char ch;
+  int key_code;
+  int fd;
+  
+  len = strlen(data);
+  for (int i=0; i<len; i++) {
+    ch = data[i];
+    printf("<ch=0x%X>", ch);
+    if (ch == 0x0A) {
+      key_code = KEY_ENTER;
+    } else {
+      key_code = char_to_keycode(ch);
+    }
+    // DeviceHandle = open(DevicePath, O_RDWR);
+    // Press a key (stuff the keyboard with a keypress)
+    event.type = EV_KEY;
+    event.value = EV_PRESSED;
+    //event.code = KEY_B;
+    event.code = key_code;
+    write(DeviceHandle, &event, sizeof(struct input_event));
+
+    // Release the key
+    event.value = EV_RELEASED;
+    //event.code = KEY_B;
+    event.code = key_code;
+    write(DeviceHandle, &event, sizeof(struct input_event));    
+    // close(fd);
+  }
+  // close(fd);
+}
+
+//-----------------------------------------------------------------------------
 // Main()
 //-----------------------------------------------------------------------------
 int MainLoop() {
   gSerialPortObj->Tick();
   if (gSerialPortObj->ReceivePointer > 0) {
-    printf("%s", gSerialPortObj->ReceiveBuffer);
+    gKeyboardObj->Send(gSerialPortObj->ReceiveBuffer);
     gSerialPortObj->ReceivePointer = 0;
   }
   fflush(stdout); 
@@ -201,11 +369,12 @@ int main(int argc, char **argv) {
       break;
     }
 
+#if DEBUG_FLAG == 1
     /* Print option when it is valid */
-    // if (cmd_opt != '?') {
-      // printf("option:-%c\n", cmd_opt);
-    // }
-
+    if (cmd_opt != '?') {
+      printf("option:-%c\n", cmd_opt);
+    }
+#endif
     /* Lets parse */
     switch (cmd_opt) {
       /* No args */
@@ -260,7 +429,9 @@ int main(int argc, char **argv) {
 
   gSerialPortObj = new SERIAL_PORT_CLASS(gSerialPortDevice);
   gSerialPortObj->Init();
-  
+  gKeyboardObj = new KEYBOARD_CLASS(gKeyboardDevice);
+  gKeyboardObj->Init();
+    
   if (gDaemonFlag == TRUE) {
     pid = fork();               // PID > 0 代表是父程序
     if (pid == -1) {            // PID == -1 代表 fork 出錯
