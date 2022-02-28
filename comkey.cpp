@@ -105,8 +105,10 @@ set_blocking (int fd, int should_block)
   printf ("error %d setting term attributes", errno);
 }
 
-short char_to_keycode(char c) {
+short char_to_keycode(char c, int *shift_flag) {
   short keycode;
+  int sflag = 0;
+  
   switch(c) {
     // these two are on many keyboard views on Android
   case ' ': keycode = KEY_SPACE; break;
@@ -152,55 +154,63 @@ short char_to_keycode(char c) {
   case '9': keycode = KEY_9; break;
   case '0': keycode = KEY_0; break;
 
-  case '@': keycode = KEY_2; break; // with SHIFT
-  case '#': keycode = KEY_3; break; // with SHIFT
+  case '@': keycode = KEY_2; sflag = 1; break; // with SHIFT
+  case '#': keycode = KEY_3; sflag = 1; break; // with SHIFT
     //case '€': keycode = KEY_5; break; // with ALTGR; not ASCII
-  case '%': keycode = KEY_5; break; // with SHIFT
-  case '&': keycode = KEY_7; break; // with SHIFT
-  case '*': keycode = KEY_8; break; // with SHIFT; alternative is KEY_KPASTERISK
+  case '%': keycode = KEY_5; sflag = 1; break; // with SHIFT
+  case '&': keycode = KEY_7; sflag = 1; break; // with SHIFT
+  case '*': keycode = KEY_8; sflag = 1; break; // with SHIFT; alternative is KEY_KPASTERISK
   case '-': keycode = KEY_MINUS; break; // alternative is KEY_KPMINUS
   case '+': keycode = KEY_EQUAL; break; // with SHIFT; alternative is KEY_KPPLUS
-  case '(': keycode = KEY_9; break; // with SHIFT
-  case ')': keycode = KEY_0; break; // with SHIFT
+  case '(': keycode = KEY_9; sflag = 1; break; // with SHIFT
+  case ')': keycode = KEY_0; sflag = 1; break; // with SHIFT
 
-  case '!': keycode = KEY_1; break; // with SHIFT
-  case '"': keycode = KEY_APOSTROPHE; break; // with SHIFT, dead key
-  case '\'': keycode = KEY_APOSTROPHE; break; // dead key
-  case ':': keycode = KEY_SEMICOLON; break; // with SHIFT
+  case '!': keycode = KEY_1; sflag = 1; break; // with SHIFT
+  case '"': keycode = KEY_APOSTROPHE; sflag = 1; break; // with SHIFT, dead key
+  case '\'': keycode = KEY_APOSTROPHE; sflag = 1; break; // dead key
+  case ':': keycode = KEY_SEMICOLON; sflag = 1; break; // with SHIFT
   case ';': keycode = KEY_SEMICOLON; break;
   case '/': keycode = KEY_SLASH; break;
-  case '?': keycode = KEY_SLASH; break; // with SHIFT
+  case '?': keycode = KEY_SLASH; sflag = 1; break; // with SHIFT
 
   case ',': keycode = KEY_COMMA; break;
 
     // special chars on Android keyboard, page 2
-  case '~': keycode = KEY_GRAVE; break; // with SHIFT, dead key
+  case '~': keycode = KEY_GRAVE; sflag = 1; break; // with SHIFT, dead key
   case '`': keycode = KEY_GRAVE; break; // dead key
-  case '|': keycode = KEY_BACKSLASH; break; // with SHIFT
+  case '|': keycode = KEY_BACKSLASH; sflag = 1; break; // with SHIFT
     // missing because there's no ASCII code:  •, √, π, ÷, ×
-  case '{': keycode = KEY_LEFTBRACE; break; // with SHIFT
-  case '}': keycode = KEY_RIGHTBRACE; break; // with SHIFT
+  case '{': keycode = KEY_LEFTBRACE; sflag = 1; break; // with SHIFT
+  case '}': keycode = KEY_RIGHTBRACE; sflag = 1; break; // with SHIFT
 
     // note: TAB key is handled elsewhere
     // missing because there's no ASCII code: £, ¥
-  case '$': keycode = KEY_4; break; // with SHIFT
+  case '$': keycode = KEY_4; sflag = 1; break; // with SHIFT
     // missing because there's no ASCII code: °
-  case '^': keycode = KEY_6; break; // with SHIFT, dead key
-  case '_': keycode = KEY_MINUS; break; // with SHIFT
+  case '^': keycode = KEY_6; sflag = 1; break; // with SHIFT, dead key
+  case '_': keycode = KEY_MINUS; sflag = 1; break; // with SHIFT
   case '=': keycode = KEY_EQUAL; break;
   case '[': keycode = KEY_LEFTBRACE; break;
   case ']': keycode = KEY_RIGHTBRACE; break;
 
     // missing because there's no ASCII code:  ™, ®, ©, ¶
   case '\\': keycode = KEY_BACKSLASH; break;
-  case '<': keycode = KEY_COMMA; break; // with SHIFT
-  case '>': keycode = KEY_DOT; break; // with SHIFT
+  case '<': keycode = KEY_COMMA; sflag = 1; break; // with SHIFT
+  case '>': keycode = KEY_DOT; sflag = 1; break; // with SHIFT
 
     // missing because there's no ASCII code:  „, …
 
   default: keycode = -1;
   }
-
+  
+  //
+  // Process & return shift key status
+  //
+  if (sflag == 0 && c >= 'A' && c <= 'Z') {
+    sflag = 1;
+  }
+  *shift_flag = sflag;
+  
   return keycode;
 }
 
@@ -307,9 +317,17 @@ int KEYBOARD_CLASS::Init() {
   return 0;
 }
 
-void KEYBOARD_CLASS::SendKey(int key_code) {
+void KEYBOARD_CLASS::SendKey(int key_code, int shift_flag) {
   struct input_event event;
+  
   event.type = EV_KEY;
+  
+  if (shift_flag) {
+    event.value = EV_PRESSED;
+    event.code = KEY_LEFTSHIFT;
+    write(DeviceHandle, &event, sizeof(struct input_event));
+  }
+  
   event.value = EV_PRESSED;
   event.code = key_code;
   write(DeviceHandle, &event, sizeof(struct input_event));
@@ -317,6 +335,12 @@ void KEYBOARD_CLASS::SendKey(int key_code) {
   event.value = EV_RELEASED;
   event.code = key_code;
   write(DeviceHandle, &event, sizeof(struct input_event));    
+  
+  if (shift_flag) {
+    event.value = EV_RELEASED;
+    event.code = KEY_LEFTSHIFT;
+    write(DeviceHandle, &event, sizeof(struct input_event));
+  }
 }
 
 int KEYBOARD_CLASS::Send(char *data) {
@@ -325,6 +349,7 @@ int KEYBOARD_CLASS::Send(char *data) {
   char ch;
   int key_code;
   int fd;
+  int shift_flag = false;
   
   //printf("<send=%s>", data);
   len = strlen(data);
@@ -333,9 +358,9 @@ int KEYBOARD_CLASS::Send(char *data) {
     if (ch == 0x0A) {
       key_code = KEY_ENTER;
     } else {
-      key_code = char_to_keycode(ch);
+      key_code = char_to_keycode(ch, &shift_flag);
     }
-    SendKey(key_code);
+    SendKey(key_code, shift_flag);
     
     //
     // Workaround: Seem key buffer will process when 4 key boundry

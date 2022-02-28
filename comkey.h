@@ -47,7 +47,7 @@ public:
 
   int Init();
   int Send(char *data);
-  void SendKey(int key_code);
+  void SendKey(int key_code, int shift_flag);
     
 private:
 
