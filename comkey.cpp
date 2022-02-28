@@ -394,6 +394,8 @@ int main(int argc, char **argv) {
   pid_t pid;
   int cmd_opt = 0;
   int com;
+  char ch;
+  int quit;
   
   printf("---------------------\n");
   printf(" COMKEY Version 1.00\n");
@@ -482,12 +484,19 @@ int main(int argc, char **argv) {
       }
       return 0;
     }
-  } else {                      
-    printf("Info: Press any key to quit\n");
-    while (!kbhit()) {
-      MainLoop();
-    }
-    getch(); 
+  } else {        
+    printf("Info: Press ESC or ~ to quit\n");
+    quit = 0;
+    do {
+      while (!kbhit()) {
+        MainLoop();
+      }
+      ch = getch();
+      if (ch == 0x1B || ch == '~') {
+        quit = 1;
+      }
+    } while (quit == 0);
+    printf("\n");
   }
   
   return 0;
