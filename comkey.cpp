@@ -277,7 +277,6 @@ void SERIAL_PORT_CLASS::Tick() {
   
   n = read (DeviceHandle, buf, sizeof buf);  // read up to 100 characters if ready to read
   if (n > 0) {
-    // printf("<n=%d>", n);
     memcpy (ReceiveBuffer+ReceivePointer, buf, n);
     ReceivePointer += n;    
     *(ReceiveBuffer+ReceivePointer) = 0;
@@ -290,6 +289,7 @@ void SERIAL_PORT_CLASS::Tick() {
 KEYBOARD_CLASS::KEYBOARD_CLASS(char *device) {
   int len;
   
+  Mode = 0;
   KeyCount = 0;
   DeviceHandle = 0;
   do {
@@ -309,16 +309,22 @@ KEYBOARD_CLASS::KEYBOARD_CLASS(char *device) {
 
 int KEYBOARD_CLASS::Init() {
   int fd;
-  if ((fd = open(DevicePath, O_RDWR)) > 0) {
-    DeviceHandle = fd;
-  } else {
-    printf("Error: Open keyboard device failed\n");
+  if (Mode == 0) {
+    if ((fd = open(DevicePath, O_RDWR)) > 0) {
+      DeviceHandle = fd;
+    } else {
+      printf("Error: Open keyboard device failed\n");
+    }
   }
   return 0;
 }
 
 void KEYBOARD_CLASS::SendKey(int key_code, int shift_flag) {
   struct input_event event;
+
+  if (Mode == 1) {
+    DeviceHandle = open(DevicePath, O_RDWR);
+  }
   
   event.type = EV_KEY;
   
@@ -341,6 +347,15 @@ void KEYBOARD_CLASS::SendKey(int key_code, int shift_flag) {
     event.code = KEY_LEFTSHIFT;
     write(DeviceHandle, &event, sizeof(struct input_event));
   }
+  
+  event.type = EV_SYN;
+  event.code = SYN_REPORT;
+  event.value = 0;
+  write(DeviceHandle, &event, sizeof(event));
+  
+  if (Mode == 1) {
+    close(DeviceHandle);
+  }
 }
 
 int KEYBOARD_CLASS::Send(char *data) {
@@ -351,7 +366,6 @@ int KEYBOARD_CLASS::Send(char *data) {
   int fd;
   int shift_flag = false;
   
-  //printf("<send=%s>", data);
   len = strlen(data);
   for (int i=0; i<len; i++) {
     ch = data[i];
@@ -361,19 +375,7 @@ int KEYBOARD_CLASS::Send(char *data) {
       key_code = char_to_keycode(ch, &shift_flag);
     }
     SendKey(key_code, shift_flag);
-    
-    //
-    // Workaround: Seem key buffer will process when 4 key boundry
-    //
-    // KeyCount++;
-    // if (key_code == KEY_ENTER) {
-      // while (KeyCount % 4 != 0) {
-        // SendKey(KEY_ENTER);
-        // KeyCount++;
-      // }
-    // }
   }
-  // close(fd);
 }
 
 //-----------------------------------------------------------------------------
@@ -385,9 +387,6 @@ int MainLoop() {
     gKeyboardObj->Send(gSerialPortObj->ReceiveBuffer);
     gSerialPortObj->ReceivePointer = 0;
   }
-  //fflush(stdout); 
-  // fflush(stdin); 
-  // fseek(stdin,0,SEEK_END);
   usleep(100*1000); // 1/10 second
 }
 

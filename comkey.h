@@ -41,6 +41,7 @@ public:
   char *DevicePath;
   int DeviceHandle;
   int KeyCount;
+  int Mode;
   
   // Default constructor
   KEYBOARD_CLASS(char *device);
