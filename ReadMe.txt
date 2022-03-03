@@ -8,7 +8,7 @@ Options -
 
 Examples:
   Run with Normal Mode
-    sudo ./comkey -s 1 -d
+    sudo ./comkey -s 1
 
   Run with Daemon Mode
     sudo ./comkey -s 1 -d
